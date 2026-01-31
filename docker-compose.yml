@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow
+      - POSTGRES_DB=airflow
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    networks:
+      - airflow-network
+
+  airflow-webserver:
+    image: apache/airflow:2.7.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=FB1q9m3rnA9A3XW97DAtu60o6-OQ-VswH_bW_O7b_Ew=
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__WEBSERVER__SECRET_KEY=secret_key
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./logs:/opt/airflow/logs
+      - ./config:/opt/airflow/config
+    ports:
+      - "8081:8080"
+    command: >
+      bash -c "pip install confluent-kafka apache-airflow-providers-postgres &&
+               airflow db upgrade &&
+               airflow users create --username admin --firstname admin --lastname admin --role Admin --email admin@example.com --password admin &&
+               airflow webserver"
+    networks:
+      - airflow-network
+      - de-kafka-practice_kafka-network
+      - streaming-network
+
+  airflow-scheduler:
+    image: apache/airflow:2.7.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres/airflow
+      - AIRFLOW__CORE__FERNET_KEY=FB1q9m3rnA9A3XW97DAtu60o6-OQ-VswH_bW_O7b_Ew=
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
+      - ./logs:/opt/airflow/logs
+      - ./config:/opt/airflow/config
+    command: bash -c "pip install confluent-kafka apache-airflow-providers-postgres && airflow db upgrade && airflow scheduler"
+    networks:
+      - airflow-network
+      - de-kafka-practice_kafka-network
+      - streaming-network
+
+networks:
+  airflow-network:
+    driver: bridge
+  de-kafka-practice_kafka-network:
+    external: true
+  streaming-network:
+    external: true
